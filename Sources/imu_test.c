@@ -29,10 +29,11 @@
 #define WHO_AM_I_EXPECTED 0x6C
 #define CTRL1_XL          0x10   // accelerometer config
 #define CTRL2_G           0x11   // gyroscope config
+#define OUTX_L_G          0x22   // gyro  X low byte (output block start)
 #define OUTX_L_A          0x28   // accel X low byte (output block start)
 
 // Config bytes
-// CTRL1_XL = 0x40 -> ODR 104 Hz, full-scale +/-4g
+// CTRL1_XL = 0x40 -> ODR 104 Hz, full-scale +/-2g  (FS bits 00)
 // CTRL2_G  = 0x44 -> ODR 104 Hz, full-scale 500 dps
 #define CTRL1_XL_CFG      0x40
 #define CTRL2_G_CFG       0x44
@@ -89,20 +90,28 @@ void LSM6DSOX_WriteReg(uint8_t reg, uint8_t data) {
     CS_HIGH();
 }
 
-// Read the 6-byte accel output block into raw[], then combine into x/y/z.
-// Each axis is little-endian: low byte first, then high byte.
-void LSM6DSOX_ReadAccel(int16_t *ax, int16_t *ay, int16_t *az) {
+// Read a 6-byte output block starting at start_reg (auto-increments),
+// combine into signed 16-bit x/y/z. Little-endian: low byte first.
+void LSM6DSOX_ReadBlock(uint8_t start_reg, int16_t *x, int16_t *y, int16_t *z) {
     uint8_t raw[6];
     CS_LOW();
-    SPI1_Transfer(OUTX_L_A | 0x80);   // read, auto-increments through the block
+    SPI1_Transfer(start_reg | 0x80);
     for (int i = 0; i < 6; i++) {
         raw[i] = SPI1_Transfer(0x00);
     }
     CS_HIGH();
 
-    *ax = (int16_t)((raw[1] << 8) | raw[0]);
-    *ay = (int16_t)((raw[3] << 8) | raw[2]);
-    *az = (int16_t)((raw[5] << 8) | raw[4]);
+    *x = (int16_t)((raw[1] << 8) | raw[0]);
+    *y = (int16_t)((raw[3] << 8) | raw[2]);
+    *z = (int16_t)((raw[5] << 8) | raw[4]);
+}
+
+void LSM6DSOX_ReadAccel(int16_t *ax, int16_t *ay, int16_t *az) {
+    LSM6DSOX_ReadBlock(OUTX_L_A, ax, ay, az);
+}
+
+void LSM6DSOX_ReadGyro(int16_t *gx, int16_t *gy, int16_t *gz) {
+    LSM6DSOX_ReadBlock(OUTX_L_G, gx, gy, gz);
 }
 
 void delay(volatile uint32_t count) {
@@ -121,19 +130,23 @@ int main(void) {
 
     delay(1000000);   // let the IMU power up and settle
 
-    // Sanity check: confirm the chip is still talking
+    // Sanity check
     uint8_t who = LSM6DSOX_ReadReg(WHO_AM_I_REG);
     (void)who;        // expect 0x6C
 
-    // Wake the sensors out of power-down
-    LSM6DSOX_WriteReg(CTRL1_XL, CTRL1_XL_CFG);   // accel: 104 Hz, +/-4g
+    // Wake both sensors out of power-down
+    LSM6DSOX_WriteReg(CTRL1_XL, CTRL1_XL_CFG);   // accel: 104 Hz, +/-2g
     LSM6DSOX_WriteReg(CTRL2_G,  CTRL2_G_CFG);    // gyro:  104 Hz, 500 dps
 
-    delay(100000);    // let the first sample come ready
+    delay(100000);    // let the first samples come ready
 
     int16_t ax = 0, ay = 0, az = 0;
+    int16_t gx = 0, gy = 0, gz = 0;
+
     LSM6DSOX_ReadAccel(&ax, &ay, &az);
-    (void)ax; (void)ay; (void)az;   // breakpoint here; flat board -> az ~ +8000, ax/ay near 0
+    LSM6DSOX_ReadGyro(&gx, &gy, &gz);
+    (void)ax; (void)ay; (void)az;
+    (void)gx; (void)gy; (void)gz;   // breakpoint here
 
     while (1) {
         __asm("nop");
