@@ -45,14 +45,12 @@ set (MFLOAT_ABI               "")
 set (RUNTIME_LIBRARY          "--specs=nano.specs")
 set (RUNTIME_LIBRARY_SYSCALLS "--specs=nosys.specs")
 
-
 set (PROJECT_SOURCES
 	# LIST SOURCE FILES HERE
 	Startup/startup_stm32f411ceux.s
-	Sources/main.c
+	Sources/imu_test.c
 	Sources/syscalls.c
 	Sources/sysmem.c
-
 
 	)
 
