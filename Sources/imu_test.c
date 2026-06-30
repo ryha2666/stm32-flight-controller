@@ -38,10 +38,22 @@
 #define CTRL1_XL_CFG      0x40
 #define CTRL2_G_CFG       0x44
 
+// Scale factors for the configured ranges.
+// Accel +/-2g:   32768 counts / 2g    = 16384 counts per g
+// Gyro  500 dps: 32768 counts / 500   = 65.5  counts per dps
+#define ACCEL_COUNTS_PER_G    16384.0f
+#define GYRO_COUNTS_PER_DPS   65.5f
+
 // Global sensor data so the Live Expressions view can read them while running.
 volatile uint8_t who = 0;
+
+// Raw counts straight off the sensor.
 volatile int16_t ax = 0, ay = 0, az = 0;
 volatile int16_t gx = 0, gy = 0, gz = 0;
+
+// Converted to physical units.
+volatile float ax_g = 0, ay_g = 0, az_g = 0;        // acceleration in g
+volatile float gx_dps = 0, gy_dps = 0, gz_dps = 0;  // angular rate in deg/sec
 
 void SPI1_GPIO_Init(void) {
     RCC_AHB1ENR |= (1 << 0);  // enable GPIOA clock
@@ -144,10 +156,20 @@ int main(void) {
     delay(100000);    // let the first samples come ready
 
     // Continuous read loop. Do NOT set a breakpoint inside this loop.
-    // Use the Live Expressions view to watch ax..gz update while running.
+    // Use the Live Expressions view to watch the values update while running.
     while (1) {
         LSM6DSOX_ReadAccel((int16_t *)&ax, (int16_t *)&ay, (int16_t *)&az);
         LSM6DSOX_ReadGyro((int16_t *)&gx, (int16_t *)&gy, (int16_t *)&gz);
+
+        // Convert raw counts to physical units.
+        ax_g = ax / ACCEL_COUNTS_PER_G;
+        ay_g = ay / ACCEL_COUNTS_PER_G;
+        az_g = az / ACCEL_COUNTS_PER_G;
+
+        gx_dps = gx / GYRO_COUNTS_PER_DPS;
+        gy_dps = gy / GYRO_COUNTS_PER_DPS;
+        gz_dps = gz / GYRO_COUNTS_PER_DPS;
+
         delay(50000);   // ~throttle so the values are readable, not a blur
     }
 }
