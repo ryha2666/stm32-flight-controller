@@ -38,6 +38,11 @@
 #define CTRL1_XL_CFG      0x40
 #define CTRL2_G_CFG       0x44
 
+// Global sensor data so the Live Expressions view can read them while running.
+volatile uint8_t who = 0;
+volatile int16_t ax = 0, ay = 0, az = 0;
+volatile int16_t gx = 0, gy = 0, gz = 0;
+
 void SPI1_GPIO_Init(void) {
     RCC_AHB1ENR |= (1 << 0);  // enable GPIOA clock
 
@@ -106,12 +111,12 @@ void LSM6DSOX_ReadBlock(uint8_t start_reg, int16_t *x, int16_t *y, int16_t *z) {
     *z = (int16_t)((raw[5] << 8) | raw[4]);
 }
 
-void LSM6DSOX_ReadAccel(int16_t *ax, int16_t *ay, int16_t *az) {
-    LSM6DSOX_ReadBlock(OUTX_L_A, ax, ay, az);
+void LSM6DSOX_ReadAccel(int16_t *axp, int16_t *ayp, int16_t *azp) {
+    LSM6DSOX_ReadBlock(OUTX_L_A, axp, ayp, azp);
 }
 
-void LSM6DSOX_ReadGyro(int16_t *gx, int16_t *gy, int16_t *gz) {
-    LSM6DSOX_ReadBlock(OUTX_L_G, gx, gy, gz);
+void LSM6DSOX_ReadGyro(int16_t *gxp, int16_t *gyp, int16_t *gzp) {
+    LSM6DSOX_ReadBlock(OUTX_L_G, gxp, gyp, gzp);
 }
 
 void delay(volatile uint32_t count) {
@@ -130,9 +135,7 @@ int main(void) {
 
     delay(1000000);   // let the IMU power up and settle
 
-    // Sanity check
-    uint8_t who = LSM6DSOX_ReadReg(WHO_AM_I_REG);
-    (void)who;        // expect 0x6C
+    who = LSM6DSOX_ReadReg(WHO_AM_I_REG);   // expect 0x6C
 
     // Wake both sensors out of power-down
     LSM6DSOX_WriteReg(CTRL1_XL, CTRL1_XL_CFG);   // accel: 104 Hz, +/-2g
@@ -140,15 +143,11 @@ int main(void) {
 
     delay(100000);    // let the first samples come ready
 
-    int16_t ax = 0, ay = 0, az = 0;
-    int16_t gx = 0, gy = 0, gz = 0;
-
-    LSM6DSOX_ReadAccel(&ax, &ay, &az);
-    LSM6DSOX_ReadGyro(&gx, &gy, &gz);
-    (void)ax; (void)ay; (void)az;
-    (void)gx; (void)gy; (void)gz;   // breakpoint here
-
+    // Continuous read loop. Do NOT set a breakpoint inside this loop.
+    // Use the Live Expressions view to watch ax..gz update while running.
     while (1) {
-        __asm("nop");
+        LSM6DSOX_ReadAccel((int16_t *)&ax, (int16_t *)&ay, (int16_t *)&az);
+        LSM6DSOX_ReadGyro((int16_t *)&gx, (int16_t *)&gy, (int16_t *)&gz);
+        delay(50000);   // ~throttle so the values are readable, not a blur
     }
 }
